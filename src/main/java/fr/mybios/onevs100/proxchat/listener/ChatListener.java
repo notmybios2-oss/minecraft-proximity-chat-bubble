@@ -8,6 +8,7 @@ import fr.mybios.onevs100.proxchat.rate.RateGuard;
 import fr.mybios.onevs100.proxchat.text.MessageSanitizer;
 import fr.mybios.onevs100.proxchat.text.SanitizeResult;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import java.util.UUID;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -28,8 +29,9 @@ import org.bukkit.plugin.Plugin;
  *
  * Handler thread: async (network chat). Nothing here reads a live entity: text extraction and
  * the sanitizer are pure, the reject line rides the thread-safe adventure audience, the rate
- * guard is CAS-based, and rendering hops to the speaker's region thread. The mode is re-checked
- * inside the hop so a flip to OFF/SUPPRESSED mid-flight drops the bubble (fail-closed).
+ * guard is CAS-based, the speak gate is contractually pure/any-thread, and rendering hops to the
+ * speaker's region thread. Mode AND gate are re-checked inside the hop, so a flip to
+ * OFF/SUPPRESSED or a mute landing mid-flight drops the bubble (fail-closed).
  */
 public final class ChatListener implements Listener {
 
@@ -42,14 +44,17 @@ public final class ChatListener implements Listener {
     private final ModeMachine modes;
     private final BubbleService bubbles;
     private final RateGuard rateGuard;
+    private final SpeakGuard speakGuard;
     private final Supplier<ProxChatConfig> config;
 
     public ChatListener(Plugin plugin, ModeMachine modes, BubbleService bubbles,
-                        RateGuard rateGuard, Supplier<ProxChatConfig> config) {
+                        RateGuard rateGuard, SpeakGuard speakGuard,
+                        Supplier<ProxChatConfig> config) {
         this.plugin = plugin;
         this.modes = modes;
         this.bubbles = bubbles;
         this.rateGuard = rateGuard;
+        this.speakGuard = speakGuard;
         this.config = config;
     }
 
@@ -72,11 +77,18 @@ public final class ChatListener implements Listener {
             case TOO_LONG -> speaker.sendMessage(Component.text(
                     REJECT_FR_PREFIX + cfg.maxMessageLength() + REJECT_FR_SUFFIX, NamedTextColor.RED));
             case OK -> {
-                if (!rateGuard.tryAcquire(speaker.getUniqueId())) {
+                UUID speakerId = speaker.getUniqueId();
+                if (!speakGuard.maySpeak(speakerId)) {
+                    // Gated by the host's moderation surface: silent, and BEFORE the rate guard so
+                    // a muted player never burns their own rate slot. Feedback is the muting
+                    // command's job, not this path's.
+                    return;
+                }
+                if (!rateGuard.tryAcquire(speakerId)) {
                     return; // Q10: silent drop
                 }
                 speaker.getScheduler().run(plugin, task -> {
-                    if (modes.current().renders()) {
+                    if (modes.current().renders() && speakGuard.maySpeak(speakerId)) {
                         bubbles.publish(speaker, result.text());
                     }
                 }, null); // refusal = speaker gone before the hop landed: nothing to render

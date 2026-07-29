@@ -1,5 +1,5 @@
 name: ProxChat
-version: 0.4.0
+version: 0.5.0
 main: fr.mybios.onevs100.proxchat.ProxChat
 # api-version 1.13 is the post-flattening floor; proven to load on Folia 26.1.2.
 api-version: "1.13"

@@ -5,6 +5,7 @@ import fr.mybios.onevs100.proxchat.ProxChatConfig;
 import fr.mybios.onevs100.proxchat.api.Mode;
 import fr.mybios.onevs100.proxchat.api.ProxChatService;
 import fr.mybios.onevs100.proxchat.bubble.BubbleService;
+import fr.mybios.onevs100.proxchat.listener.SpeakGuard;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -29,13 +30,15 @@ public final class ProxChatCommand implements CommandExecutor, TabCompleter {
     private final ProxChat plugin;
     private final ProxChatService service;
     private final BubbleService bubbles;
+    private final SpeakGuard speakGuard;
     private final Supplier<ProxChatConfig> config;
 
     public ProxChatCommand(ProxChat plugin, ProxChatService service, BubbleService bubbles,
-                           Supplier<ProxChatConfig> config) {
+                           SpeakGuard speakGuard, Supplier<ProxChatConfig> config) {
         this.plugin = plugin;
         this.service = service;
         this.bubbles = bubbles;
+        this.speakGuard = speakGuard;
         this.config = config;
     }
 
@@ -46,6 +49,7 @@ public final class ProxChatCommand implements CommandExecutor, TabCompleter {
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "status" -> reply(sender, "mode=" + service.mode()
+                    + " " + speakGuard.describe()
                     + " " + bubbles.describe()
                     + " " + summarize(config.get()));
             case "on" -> switchMode(sender, Mode.ON);

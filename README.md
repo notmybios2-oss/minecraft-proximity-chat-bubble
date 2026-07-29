@@ -107,7 +107,30 @@ Every method is callable from any thread; mode flips are atomic, and add the
 prox-chat jar as `compileOnly` — the `…proxchat.api` package is the only intended
 import surface.
 
-## Known issues (0.4.0)
+### Silencing one player (`BubbleGate`)
+
+For a moderation mute, register a `BubbleGate` — ProxChat asks it, per message, whether
+that player may still speak. Registration goes the other way round: you register, ProxChat
+consults.
+
+```java
+Set<UUID> muted = ConcurrentHashMap.newKeySet();
+getServer().getServicesManager().register(
+        BubbleGate.class, speaker -> !muted.contains(speaker), this, ServicePriority.Normal);
+```
+
+- **No gate registered = everyone may speak**, and a gate that throws is treated as absent
+  for that message (logged once). A missing or broken moderation plugin never silences a
+  server. `/proxchat status` shows `gate=registered` / `gate=none` so you can tell.
+- `maySpeak` is called from the **async chat thread and from the speaker's region thread**
+  (once before the rate limiter, once immediately before the bubble renders, so a mute
+  landing mid-message still drops it). It must be pure, non-blocking and thread-safe — a
+  concurrent set of UUIDs, no entity or world access, no I/O.
+- A denial is silent, costs the player no rate-limit slot, writes nothing to the
+  conversation log, and does not revive the chat broadcast. Bubbles already rendered fade on
+  their own `lifetime-seconds`; use `clearAll()` if you need instant silence.
+
+## Known issues (0.5.0)
 
 - The speaker's vanilla **nametag is not drawn while a bubble is mounted**; it returns
   when the last bubble fades. This is current-client render behavior — the client owns

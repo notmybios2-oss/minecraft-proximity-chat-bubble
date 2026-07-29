@@ -1,10 +1,12 @@
 package fr.mybios.onevs100.proxchat;
 
+import fr.mybios.onevs100.proxchat.api.BubbleGate;
 import fr.mybios.onevs100.proxchat.api.ProxChatService;
 import fr.mybios.onevs100.proxchat.bubble.BubbleService;
 import fr.mybios.onevs100.proxchat.command.ProxChatCommand;
 import fr.mybios.onevs100.proxchat.listener.ChatListener;
 import fr.mybios.onevs100.proxchat.listener.PlayerLifecycleListener;
+import fr.mybios.onevs100.proxchat.listener.SpeakGuard;
 import fr.mybios.onevs100.proxchat.log.ConversationLog;
 import fr.mybios.onevs100.proxchat.rate.RateGuard;
 import java.io.IOException;
@@ -63,8 +65,14 @@ public final class ProxChat extends JavaPlugin {
         // Suppliers, not snapshots: a config reload retunes the guard and listeners live.
         RateGuard rateGuard = new RateGuard(() -> config.minMessageIntervalMs(), System::nanoTime);
 
+        // Optional per-speaker gate a host plugin may register (moderation mute). Resolved per
+        // message, never cached: a host that enables after us — or reloads — is picked up live.
+        SpeakGuard speakGuard = new SpeakGuard(
+                () -> getServer().getServicesManager().load(BubbleGate.class),
+                getLogger()::warning);
+
         getServer().getPluginManager().registerEvents(
-                new ChatListener(this, modes, bubbles, rateGuard, () -> config), this);
+                new ChatListener(this, modes, bubbles, rateGuard, speakGuard, () -> config), this);
         getServer().getPluginManager().registerEvents(
                 new PlayerLifecycleListener(bubbles, rateGuard), this);
 
@@ -74,7 +82,8 @@ public final class ProxChat extends JavaPlugin {
             // soft — bubbles and the service API don't depend on the admin lever.
             getLogger().severe("command 'proxchat' missing from plugin.yml — admin lever unavailable");
         } else {
-            ProxChatCommand executor = new ProxChatCommand(this, controller, bubbles, () -> config);
+            ProxChatCommand executor =
+                    new ProxChatCommand(this, controller, bubbles, speakGuard, () -> config);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
