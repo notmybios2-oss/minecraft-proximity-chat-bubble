@@ -14,8 +14,10 @@ bubbles:
   # Bubble stack depth per player: newest at the bottom, oldest falls off the top.
   max-per-player: 3
   # Mounted-display translation above the RIDE anchor, not the head - tuned live in-game.
-  # Change only with an in-game re-check.
-  height-above-head: 1.2
+  # 0.3 is the live-tuned value for servers running with nametags disabled: the taller 1.2
+  # offset leaves a visible gap between bubble and player when no nametag sits between
+  # them; 0.3 closes it. Change only with an in-game re-check.
+  height-above-head: 0.3
   # Vertical distance between stacked bubbles (blocks).
   stack-spacing: 0.30
   # Sneaking hides the sneaker's bubbles; they reappear on rising if lifetime remains (Q1).
