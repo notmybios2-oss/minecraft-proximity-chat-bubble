@@ -430,14 +430,29 @@ public final class BubbleService {
 
     /** Pure snapshot math: same world, squared distance, includes the speaker (Q2 self-view). */
     private Set<UUID> computeDesired(UUID speakerId, ProxChatConfig cfg) {
+        return desiredFor(speakerId, snapshots, cfg.radiusSquared());
+    }
+
+    /**
+     * The admission pass, extracted whole and static so the guarantee it implements can be tested
+     * without a server. Every snapshot is read from the map EXACTLY ONCE and the world check and
+     * the distance check are applied to that one immutable sample — reading the map twice would
+     * let a player who crosses worlds between the two lookups pass a world check against their
+     * old sample and a distance check against their new one.
+     *
+     * @param speakerId the speaker; absent from {@code snapshots} means their heartbeat has not
+     *                  published yet (pc-007 N1), and the correct answer is "nobody" — a bubble
+     *                  with no admission math behind it must never be shown to anyone
+     */
+    static Set<UUID> desiredFor(UUID speakerId, Map<UUID, PlayerSnapshot> snapshots,
+                                double radiusSquared) {
         PlayerSnapshot me = snapshots.get(speakerId);
         if (me == null) {
             return Set.of();
         }
-        double r2 = cfg.radiusSquared();
         Set<UUID> desired = new HashSet<>();
         for (Map.Entry<UUID, PlayerSnapshot> entry : snapshots.entrySet()) {
-            if (me.admits(entry.getValue(), r2)) {
+            if (me.admits(entry.getValue(), radiusSquared)) {
                 desired.add(entry.getKey());
             }
         }

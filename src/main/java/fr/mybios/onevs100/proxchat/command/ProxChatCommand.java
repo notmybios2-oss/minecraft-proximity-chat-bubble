@@ -88,11 +88,21 @@ public final class ProxChatCommand implements CommandExecutor, TabCompleter {
     }
 
     private static String summarize(ProxChatConfig cfg) {
+        // radius and cull are reported together because they are a pair: the radius decides who
+        // receives a bubble, the cull decides whether their client draws it. An operator who can
+        // see only one of the two cannot tell a correctly-tuned server from one where the belt
+        // bites inside the radius — which looks exactly like "bubbles are broken at range".
         return "radius=" + cfg.radiusBlocks()
+                + " cull=" + round1(cfg.viewRange() * ProxChatConfig.VIEW_RANGE_BLOCK_BASE)
                 + " lifetime=" + cfg.lifetimeSeconds() + "s"
                 + " max-per-player=" + cfg.maxPerPlayer()
                 + " max-length=" + cfg.maxMessageLength()
                 + " min-interval=" + cfg.minMessageIntervalMs() + "ms";
+    }
+
+    /** One decimal: the float view-range would otherwise print 38.400001 blocks of cull. */
+    private static double round1(double blocks) {
+        return Math.round(blocks * 10.0) / 10.0;
     }
 
     @Override
