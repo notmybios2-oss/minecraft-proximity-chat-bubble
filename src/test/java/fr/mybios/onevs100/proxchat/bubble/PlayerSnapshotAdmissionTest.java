@@ -68,7 +68,7 @@ class PlayerSnapshotAdmissionTest {
 
     @Test
     void exactlyAtTheRadiusIsAdmittedAndAHairBeyondIsNot() {
-        // The boundary the book's walk-in/walk-out entry paces out. <= is the documented choice.
+        // The boundary the walk-in/walk-out test paces out. <= is the documented choice.
         assertTrue(origin().admits(at(OVERWORLD, 32.0, 0, 0), R2));
         assertFalse(origin().admits(at(OVERWORLD, 32.0001, 0, 0), R2));
         assertTrue(origin().admits(at(OVERWORLD, 31.9999, 0, 0), R2));

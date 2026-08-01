@@ -55,9 +55,9 @@ class AdmissionPassTest {
 
     @Test
     void aSpeakerWithNoPublishedSampleRendersToNobody() {
-        // pc-007 N1: a message typed within a tick of joining, before the first heartbeat. The
-        // answer must be the empty set, not "everyone" — a bubble with no admission math behind
-        // it would be a broadcast.
+        // A message typed within a tick of joining, before the first heartbeat published a
+        // sample. The answer must be the empty set, not "everyone" — a bubble with no admission
+        // math behind it would be a broadcast.
         Map<UUID, PlayerSnapshot> snapshots = new ConcurrentHashMap<>();
         snapshots.put(UUID.randomUUID(), at(OVERWORLD, 1));
         assertEquals(Set.of(), BubbleService.desiredFor(UUID.randomUUID(), snapshots, R2));

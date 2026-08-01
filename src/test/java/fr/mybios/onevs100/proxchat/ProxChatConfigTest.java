@@ -27,8 +27,8 @@ class ProxChatConfigTest {
     @Test
     void defaultsMatchTheApprovedSpec() {
         // Owner ruling 2026-08-01 ("if you can see a player you can read them"): radius 32 with
-        // the paired 0.6 cull belt. height-above-head is the live-tuned ride-anchor 0.3 — the
-        // value prod actually runs, and now the value a config MISSING the key falls back to.
+        // the paired 0.6 cull belt. height-above-head is the live-tuned ride-anchor 0.3 — what
+        // config.yml has shipped since 0.4.0, and now what a config MISSING the key falls to.
         ProxChatConfig d = ProxChatConfig.DEFAULTS;
         assertEquals(32.0, d.radiusBlocks());
         assertEquals(8, d.lifetimeSeconds());

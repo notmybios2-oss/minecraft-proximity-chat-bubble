@@ -441,8 +441,9 @@ public final class BubbleService {
      * old sample and a distance check against their new one.
      *
      * @param speakerId the speaker; absent from {@code snapshots} means their heartbeat has not
-     *                  published yet (pc-007 N1), and the correct answer is "nobody" — a bubble
-     *                  with no admission math behind it must never be shown to anyone
+     *                  published a first sample yet (reachable only within a tick of joining),
+     *                  and the correct answer is "nobody" — a bubble with no admission math
+     *                  behind it must never be shown to anyone
      */
     static Set<UUID> desiredFor(UUID speakerId, Map<UUID, PlayerSnapshot> snapshots,
                                 double radiusSquared) {

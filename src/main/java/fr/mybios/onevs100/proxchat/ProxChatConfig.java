@@ -44,7 +44,7 @@ public record ProxChatConfig(
             // radius 32 + view-range 0.6 are a PAIR (owner ruling 2026-08-01): 0.6 × 64 = 38.4
             // blocks of cull around a 32-block radius. Changing one without the other is the
             // mistake pairCullBelt exists to catch. Height 0.3 is the live-tuned ride-anchor
-            // offset for servers running without nametags — the value prod actually runs.
+            // offset for servers running without nametags, and matches the shipped config.yml.
             32.0, 8, 3, 0.3, 0.30, true, 96, 200, 0.6f, 750,
             // Conversation log ships OFF, keep-forever (retention 0 = never prune — owner
             // ruling: footage editing can happen up to a year later), admits recorded.

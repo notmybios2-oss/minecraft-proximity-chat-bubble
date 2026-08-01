@@ -21,7 +21,7 @@ public record PlayerSnapshot(String name, UUID worldId, double x, double y, doub
     /**
      * THE admission predicate — the anonymity guarantee in one line: a viewer is admitted only if
      * they share the speaker's world AND sit within the radius. Exactly-at-radius is admitted
-     * ({@code <=}), which is the boundary the book's walk-in/walk-out entry measures against.
+     * ({@code <=}), which is what the walk-in/walk-out test measures against.
      *
      * <p>Pure, total and side-effect-free on purpose: this is the rule everything else defers to,
      * so it is property-testable without a server. Never widen it to "or the viewer asked nicely".

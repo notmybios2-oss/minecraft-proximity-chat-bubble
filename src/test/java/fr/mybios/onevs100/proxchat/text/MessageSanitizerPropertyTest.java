@@ -74,11 +74,11 @@ class MessageSanitizerPropertyTest {
 
     @Test
     void theTagBlockIsStripped() {
-        // U+E0020–E007F mirror ASCII invisibly: "MyBios" written in tag characters renders as
+        // U+E0020–E007F mirror ASCII invisibly: "Renard" written in tag characters renders as
         // nothing and reads back perfectly. Named explicitly because it is THE steganography
         // channel for an anonymous chat, and the old strip list let all of it through.
         StringBuilder hidden = new StringBuilder("salut");
-        for (char c : "MyBios".toCharArray()) {
+        for (char c : "Renard".toCharArray()) {
             hidden.appendCodePoint(0xE0000 + c);
         }
         assertEquals("salut", MessageSanitizer.sanitize(hidden.toString(), CAP).text());
