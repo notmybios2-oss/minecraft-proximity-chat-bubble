@@ -2,6 +2,8 @@ package fr.mybios.onevs100.proxchat.log;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -34,6 +36,12 @@ import java.util.logging.Logger;
  * filename, and retention pruning at each file open ({@code retention-days: 0} = keep forever,
  * the ruled default; pruning never touches the file being opened). Queue overflow or an I/O
  * failure drops the line, counts it, and warns at most once per 30 s.
+ *
+ * <p>CRASH RECOVERY: every open checks whether the file it is appending to ends mid-line — a
+ * kill -9, a power cut, or an aborted flush can leave one — and terminates that fragment before
+ * writing. Without it the next record would be glued onto the fragment and ONE damaged line
+ * would cost two. With it, damage is bounded to the line that was actually interrupted and every
+ * line after it parses.
  *
  * <p>{@link #close()} stops intake, drains whatever is queued, and bounds the wait — a server
  * stop is never stalled by this log.
@@ -154,9 +162,48 @@ public final class ConversationLog implements AutoCloseable {
         Files.createDirectories(directory);
         prune(day);
         Path file = directory.resolve(FILE_PREFIX + DateTimeFormatter.ISO_LOCAL_DATE.format(day) + FILE_SUFFIX);
+        boolean torn = endsMidLine(file);
         out = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        if (torn) {
+            // The file ends without its newline: a kill -9 or a power cut caught a flush in
+            // progress, or an I/O error aborted one mid-write. Appending straight onto that
+            // fragment would GLUE the next record to it, so one damaged line would silently cost
+            // two — and every consumer tailing this file would see one unparseable blob instead
+            // of one skippable bad line. Terminate the fragment first; the damage stays bounded
+            // to the line that was actually interrupted.
+            out.write('\n');
+            out.flush();
+            logger.warning("conversation log " + file.getFileName()
+                    + " ended mid-line (interrupted write) — closed that fragment off;"
+                    + " exactly one line in it is truncated, everything after it is intact");
+        }
         openDate = day;
+    }
+
+    /**
+     * True when the file exists, is non-empty, and its last byte is not a newline. Byte-level on
+     * purpose: no UTF-8 continuation byte can ever be 0x0A, so the check needs no decoding and
+     * cannot be fooled by a multi-byte character split across the interrupted write.
+     *
+     * <p>Unreadable answers "not torn": the append that follows will fail too and take the
+     * normal I/O-failure path, whereas guessing "torn" would write a stray blank line into a
+     * healthy file on every reopen.
+     */
+    private static boolean endsMidLine(Path file) {
+        try {
+            long size = Files.size(file);
+            if (size == 0) {
+                return false;
+            }
+            try (SeekableByteChannel channel = Files.newByteChannel(file, StandardOpenOption.READ)) {
+                ByteBuffer last = ByteBuffer.allocate(1);
+                channel.position(size - 1);
+                return channel.read(last) == 1 && last.get(0) != '\n';
+            }
+        } catch (IOException absentOrUnreadable) {
+            return false;
+        }
     }
 
     /**
@@ -290,6 +337,17 @@ public final class ConversationLog implements AutoCloseable {
                 case '\t' -> sb.append("\\t");
                 default -> {
                     if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else if (Character.isHighSurrogate(c) && i + 1 < raw.length()
+                            && Character.isLowSurrogate(raw.charAt(i + 1))) {
+                        // A well-formed pair is written as-is so emoji stay readable in a file
+                        // that is meant to be tailed by a human as well as a program.
+                        sb.append(c).append(raw.charAt(++i));
+                    } else if (Character.isSurrogate(c)) {
+                        // An unpaired half is not encodable as UTF-8: written raw it reaches the
+                        // file as '?', so the record would no longer say what it was handed.
+                        // Sanitization already removes these from message text; names and world
+                        // names come from elsewhere and are not sanitized.
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
                         sb.append(c);
