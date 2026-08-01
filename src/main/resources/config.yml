@@ -7,7 +7,10 @@ bubbles:
   # Hard server-side visibility radius in blocks (same world only). Admission is
   # server-authoritative: a modified client cannot read bubbles beyond this radius,
   # because it never receives them. view-range below is only a client-side cull belt.
-  radius-blocks: 24.0
+  # PAIRED KEY: raising this without raising view-range makes the client stop drawing
+  # bubbles INSIDE the radius. The plugin raises view-range for you and says so in the
+  # console, but set both deliberately - see the note on view-range.
+  radius-blocks: 32.0
   # Seconds before a bubble fades. Expiry is scheduled per bubble; a 0.5 s reconciler
   # backstops lost tasks.
   lifetime-seconds: 8
@@ -28,9 +31,16 @@ bubbles:
   # Client text wrap width in pixels - the only line-break authority (newlines never
   # survive sanitization).
   line-width: 200
-  # Display view range as a fraction of the client's 64-block entity render base.
-  # Cull belt only; the hard guarantee is the admission radius above.
-  view-range: 0.5
+  # Display view range as a fraction of the client's 64-block entity render base, so
+  # 0.6 = bubbles stop being DRAWN past ~38.4 blocks. Cull belt only; the hard guarantee
+  # is the admission radius above. Keep it at least 1.2x the radius (32 -> 0.6): the belt
+  # absorbs the 0.5 s admission refresh, so someone standing at the edge still sees the
+  # bubble instead of watching it flicker. Below that pairing the plugin raises it and
+  # warns. Widening costs nothing in bandwidth - only admitted players ever receive the
+  # entity, so this decides drawing, never delivery.
+  # Two belts sit outside this file and can also hide bubbles if you go much wider:
+  # spigot.yml entity-tracking-range.display (128 by default) and the server view-distance.
+  view-range: 0.6
   # Per-player minimum interval between accepted messages (ms); excess is dropped
   # silently (anti-churn guard - every bubble costs an entity spawn + packet fan-out).
   # Deliberately NOT applied to the overlong-reject line: a reject is one message to

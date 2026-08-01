@@ -8,7 +8,7 @@ names, no global broadcast, and no chat logs unless you turn them on.
 
 While the plugin is **ON**, regular chat no longer broadcasts to the whole server.
 Each message becomes a text bubble mounted above the speaker, visible to anyone within
-a configurable radius (default 24 blocks, same world only). Bubbles stack per player
+a configurable radius (default 32 blocks, same world only). Bubbles stack per player
 (newest at the bottom), fade after a few seconds, and hide while the speaker sneaks.
 
 ## Features
@@ -66,16 +66,30 @@ Requires Folia or Paper **26.1.2 or newer** (Java 25 runtime).
 
 | Key (under `bubbles:`) | Default | What it does |
 |---|---|---|
-| `radius-blocks` | `24.0` | Server-side visibility radius in blocks (same world only) |
+| `radius-blocks` | `32.0` | Server-side visibility radius in blocks (same world only) |
 | `lifetime-seconds` | `8` | Seconds before a bubble fades |
 | `max-per-player` | `3` | Stack depth per player; the oldest falls off the top |
-| `height-above-head` | `1.2` | Height of the bubble stack above the player |
+| `height-above-head` | `0.3` | Height of the bubble stack above the player |
 | `stack-spacing` | `0.30` | Vertical gap between stacked bubbles (blocks) |
 | `hide-on-sneak` | `true` | Sneaking hides your bubbles; they return when you rise |
 | `max-message-length` | `96` | Max length in code points, counted after sanitization |
 | `line-width` | `200` | Client text-wrap width in pixels |
-| `view-range` | `0.5` | Client render cull, as a fraction of the 64-block base |
+| `view-range` | `0.6` | Client render cull, as a fraction of the 64-block base |
 | `min-message-interval-ms` | `750` | Per-player minimum interval between accepted messages |
+
+### Radius and the render cull are a pair
+
+`radius-blocks` decides who *receives* a bubble; `view-range` decides whether their client
+*draws* it, at `view-range × 64` blocks. Raise the radius alone and the cull starts biting
+**inside** it — players standing well within earshot see nothing, or watch edge bubbles
+flicker. Keep the cull at least 1.2× the radius (`32` → `0.6`); below that the plugin
+raises it for you and says so in the console. Widening costs no bandwidth, because only
+admitted players ever receive the entity.
+
+Two limits outside this file can also hide bubbles if you go much wider: `spigot.yml`'s
+`entity-tracking-range.display` (128 by default) and the server's view distance. And on the
+client side, a player whose *Entity Distance* video setting is below 100% culls
+proportionally earlier than the table above suggests.
 
 | Key (under `conversation-log:`) | Default | What it does |
 |---|---|---|
@@ -88,7 +102,8 @@ object per line, flushed per line (safe to `tail -f`). All keys apply live via
 `/proxchat reload` — including flipping the log on or off.
 
 Keys missing from a deployed config fall back to their defaults, so upgrading never
-requires regenerating the file.
+requires regenerating the file. The defaults above are exactly the values the code falls
+back to — a key you delete behaves like the table says.
 
 ## API for other plugins
 

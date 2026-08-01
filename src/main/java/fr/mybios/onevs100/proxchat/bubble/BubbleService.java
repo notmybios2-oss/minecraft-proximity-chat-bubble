@@ -437,8 +437,7 @@ public final class BubbleService {
         double r2 = cfg.radiusSquared();
         Set<UUID> desired = new HashSet<>();
         for (Map.Entry<UUID, PlayerSnapshot> entry : snapshots.entrySet()) {
-            PlayerSnapshot other = entry.getValue();
-            if (other.worldId().equals(me.worldId()) && other.distanceSquaredTo(me) <= r2) {
+            if (me.admits(entry.getValue(), r2)) {
                 desired.add(entry.getKey());
             }
         }

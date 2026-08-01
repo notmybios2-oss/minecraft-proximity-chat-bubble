@@ -20,9 +20,28 @@
 
 ### Changed
 
+- **Default `radius-blocks` is now `32.0` (was `24.0`)** — if you can see a player, you can
+  read them. `view-range` moves with it to `0.6`, because the two are a **pair**: the radius
+  decides who *receives* a bubble, the view range decides whether their client *draws* it
+  (`view-range × 64` blocks).
+- **The pairing is now enforced.** A `view-range` that culls closer than 1.2× the radius is
+  raised to the paired minimum with a console warning. The failure it prevents is invisible
+  from the server — the client receives the bubble and quietly declines to draw it, so players
+  standing well inside the radius see nothing and edge bubbles flicker. A radius too large for
+  the belt to cover at all (past ~107 blocks) caps at `view-range: 2.0` and says plainly that
+  admitted viewers beyond that distance may see nothing. Widening the belt yourself costs no
+  bandwidth and is never second-guessed: only admitted players ever receive the entity.
 - Default `height-above-head` is now `0.3` (was `1.2`) — tuned for servers that hide
   nametags, where the taller offset leaves a visible gap between bubble and player.
   Deployed configs are never regenerated, so existing servers keep their value.
+
+### Fixed
+
+- The documented `height-above-head` default and the code's fallback had drifted apart in
+  0.4.0: `config.yml` shipped `0.3`, but a deployed config with that key *deleted* fell back
+  to `1.2`. The code default now matches the documentation, and a test pins every shipped
+  default — including that the radius and view-range defaults satisfy their own pairing rule —
+  so the two cannot drift again.
 
 ## 0.4.0 — unreleased
 

@@ -26,17 +26,19 @@ class ProxChatConfigTest {
 
     @Test
     void defaultsMatchTheApprovedSpec() {
-        // The approved spec values; height-above-head is the in-game-tuned ride-anchor 1.2.
+        // Owner ruling 2026-08-01 ("if you can see a player you can read them"): radius 32 with
+        // the paired 0.6 cull belt. height-above-head is the live-tuned ride-anchor 0.3 — the
+        // value prod actually runs, and now the value a config MISSING the key falls back to.
         ProxChatConfig d = ProxChatConfig.DEFAULTS;
-        assertEquals(24.0, d.radiusBlocks());
+        assertEquals(32.0, d.radiusBlocks());
         assertEquals(8, d.lifetimeSeconds());
         assertEquals(3, d.maxPerPlayer());
-        assertEquals(1.2, d.heightAboveHead());
+        assertEquals(0.3, d.heightAboveHead());
         assertEquals(0.30, d.stackSpacing());
         assertTrue(d.hideOnSneak());
         assertEquals(96, d.maxMessageLength());
         assertEquals(200, d.lineWidth());
-        assertEquals(0.5f, d.viewRange());
+        assertEquals(0.6f, d.viewRange());
         assertEquals(750, d.minMessageIntervalMs());
         // Conversation log ships OFF, keep-forever, admits recorded.
         assertFalse(d.conversationLogEnabled());
@@ -92,12 +94,101 @@ class ProxChatConfigTest {
 
     @Test
     void missingKeysFallBackPerKey() {
+        // 20 is deliberately INSIDE the default cull belt (0.6 × 64 = 38.4) so this stays a pure
+        // splice test — raising the radius past the belt is its own test below.
         MemoryConfiguration root = new MemoryConfiguration();
-        root.createSection("bubbles").set("radius-blocks", 48.0);
+        root.createSection("bubbles").set("radius-blocks", 20.0);
         ProxChatConfig cfg = ProxChatConfig.from(root, warnings::add);
-        assertEquals(48.0, cfg.radiusBlocks());
+        assertEquals(20.0, cfg.radiusBlocks());
         assertEquals(8, cfg.lifetimeSeconds()); // untouched keys keep their defaults
         assertTrue(warnings.isEmpty());
+    }
+
+    // ---------------------------------------------------------------- cull-belt pairing
+
+    @Test
+    void theShippedDefaultsSatisfyTheirOwnPairingRule() {
+        // The regression that matters most: nobody may change one of the pair and not the other.
+        ProxChatConfig d = ProxChatConfig.DEFAULTS;
+        double culledAt = d.viewRange() * ProxChatConfig.VIEW_RANGE_BLOCK_BASE;
+        assertTrue(culledAt >= d.radiusBlocks() * ProxChatConfig.CULL_BELT_FACTOR,
+                "default view-range culls at " + culledAt + " blocks, too tight for a "
+                        + d.radiusBlocks() + "-block radius");
+        // ...and parsing the defaults back must not "fix" them: no warning, no change.
+        MemoryConfiguration root = new MemoryConfiguration();
+        var s = root.createSection("bubbles");
+        s.set("radius-blocks", d.radiusBlocks());
+        s.set("view-range", (double) d.viewRange());
+        assertEquals(d.viewRange(), ProxChatConfig.from(root, warnings::add).viewRange());
+        assertTrue(warnings.isEmpty(), () -> "defaults tripped their own pairing: " + warnings);
+    }
+
+    @Test
+    void raisingTheRadiusAloneRaisesTheCullBeltAndSaysSo() {
+        // The real migration hazard: an operator bumps the radius and leaves view-range behind,
+        // so the client stops DRAWING bubbles well inside a radius the server still admits.
+        MemoryConfiguration root = new MemoryConfiguration();
+        var s = root.createSection("bubbles");
+        s.set("radius-blocks", 48.0);
+        s.set("view-range", 0.5);
+        ProxChatConfig cfg = ProxChatConfig.from(root, warnings::add);
+        assertEquals(48.0, cfg.radiusBlocks());
+        assertEquals(0.9f, cfg.viewRange()); // 48 × 1.2 / 64
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("view-range"), warnings.get(0));
+        assertTrue(warnings.get(0).contains("raised to"), warnings.get(0));
+    }
+
+    @Test
+    void aGenerousCullBeltIsLeftExactlyAsConfigured() {
+        // Widening costs nothing (only admitted viewers ever receive the entity), so an operator
+        // who deliberately over-provisions must not be second-guessed.
+        MemoryConfiguration root = new MemoryConfiguration();
+        var s = root.createSection("bubbles");
+        s.set("radius-blocks", 32.0);
+        s.set("view-range", 1.5);
+        ProxChatConfig cfg = ProxChatConfig.from(root, warnings::add);
+        assertEquals(1.5f, cfg.viewRange());
+        assertTrue(warnings.isEmpty());
+    }
+
+    @Test
+    void anUnreachablePairingCapsAndWarnsDistinctly() {
+        // At the maximum radius the belt simply cannot cover it (128 × 1.2 / 64 = 2.4 > 2.0).
+        // Cap, and say plainly that some admitted viewers may see nothing — never pretend.
+        MemoryConfiguration root = new MemoryConfiguration();
+        root.createSection("bubbles").set("radius-blocks", 128.0);
+        ProxChatConfig cfg = ProxChatConfig.from(root, warnings::add);
+        assertEquals((float) ProxChatConfig.VIEW_RANGE_MAX, cfg.viewRange());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("cannot cover"), warnings.get(0));
+    }
+
+    @Test
+    void pairingNeverLowersAnAlreadySufficientBelt() {
+        // Property sweep over the whole legal radius range: the result always clears the radius
+        // when reachable, and is never quietly reduced below what the operator asked for.
+        for (double radius = 1.0; radius <= 128.0; radius += 0.5) {
+            for (float configured : new float[] {0.05f, 0.5f, 0.6f, 1.0f, 2.0f}) {
+                warnings.clear();
+                float paired = ProxChatConfig.pairCullBelt(radius, configured, warnings::add);
+                assertTrue(paired >= configured,
+                        "lowered " + configured + " to " + paired + " at radius " + radius);
+                boolean reachable = radius * ProxChatConfig.CULL_BELT_FACTOR
+                        <= ProxChatConfig.VIEW_RANGE_MAX * ProxChatConfig.VIEW_RANGE_BLOCK_BASE;
+                if (reachable) {
+                    // Tolerance is in BLOCKS, deliberately. view-range is stored as a float, so a
+                    // clean 0.9 lands ~1.5e-6 blocks under the ideal belt. The pairing is a
+                    // physical margin, not an exact real — and keeping the stored values round
+                    // (0.6, 0.9) matters more, because they are what operators read in warnings
+                    // and write in config.yml.
+                    assertTrue(paired * ProxChatConfig.VIEW_RANGE_BLOCK_BASE
+                                    >= radius * ProxChatConfig.CULL_BELT_FACTOR - 1e-3,
+                            "belt " + paired + " too tight for radius " + radius);
+                }
+                assertTrue(warnings.size() <= 1, "at most one pairing warning per parse");
+            }
+        }
     }
 
     @Test
@@ -118,7 +209,7 @@ class ProxChatConfigTest {
     @Test
     void derivedValuesAreConsistent() {
         ProxChatConfig d = ProxChatConfig.DEFAULTS;
-        assertEquals(576.0, d.radiusSquared());
+        assertEquals(1024.0, d.radiusSquared()); // 32²
         assertEquals(8_000_000_000L, d.lifetimeNanos());
         assertEquals(160L, d.lifetimeTicks());
     }
